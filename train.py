@@ -357,18 +357,21 @@ else:
     model.eval()
     dataset = BinaryFileDataset(data_dir, 'test', block_size)
     dataloader = DataLoader(dataset, batch_size=batch_size)
-    total_loss = []
-    for X, Y in dataloader:
-        X, Y = X.to(device), Y.to(device)
-        with ctx:
-            logits, _ = model(X)
-            logits = logits.squeeze()
-        targets = Y[:, -1]
-        loss = F.cross_entropy(logits, targets, ignore_index=-1, reduction='none')
-        loss = loss / math.log(2)
-        total_loss.append(loss)
-    total_loss = torch.cat(total_loss).mean()
-    print(f'test loss {total_loss.item():.4f}')
+    with torch.no_grad():
+        total_loss, n_examples = 0., 0
+        for X, Y in dataloader:
+            X, Y = X.to(device), Y.to(device)
+            with ctx:
+                logits, _ = model(X)
+                logits = logits.squeeze()
+            targets = Y[:, -1]
+            loss = F.cross_entropy(logits, targets, ignore_index=-1)
+            loss = loss / math.log(2)
+            total_loss += loss.item()
+            n_examples += len(X)
+            del logits, loss
+            torch.cuda.empty_cache()
+        print(f'test loss {total_loss / n_examples:.4f}')
 
 if ddp:
     destroy_process_group()
