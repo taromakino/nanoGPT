@@ -27,26 +27,8 @@ import torch
 import torch.nn.functional as F
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.distributed import init_process_group, destroy_process_group
-from torch.utils.data import DataLoader, Dataset
 
 from model import GPTConfig, GPT
-
-class BinaryFileDataset(Dataset):
-    def __init__(self, data_dir, split, block_size):
-        self.data_path = os.path.join(data_dir, f'{split}.bin')
-        self.block_size = block_size
-        # Get file size once
-        self.data_length = os.path.getsize(self.data_path) // 2  # uint16 = 2 bytes
-
-    def __len__(self):
-        return self.data_length - self.block_size
-
-    def __getitem__(self, idx):
-        # Open and close for each item to prevent memory leaks
-        data = np.memmap(self.data_path, dtype=np.uint16, mode='r')
-        x = torch.from_numpy(data[idx:idx + self.block_size].astype(np.int64))
-        y = torch.from_numpy(data[idx + 1:idx + 1 + self.block_size].astype(np.int64))
-        return x, y
 
 # -----------------------------------------------------------------------------
 # default config values designed to train a gpt2 (124M) on OpenWebText
@@ -134,14 +116,12 @@ ctx = nullcontext() if device_type == 'cpu' else torch.amp.autocast(device_type=
 
 # poor man's data loader
 data_dir = os.path.join('data', dataset)
-def get_batch(split):
+def get_batch(split, ix=None):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
-    if split == 'train':
-        data = np.memmap(os.path.join(data_dir, 'train.bin'), dtype=np.uint16, mode='r')
-    else:
-        data = np.memmap(os.path.join(data_dir, 'val.bin'), dtype=np.uint16, mode='r')
-    ix = torch.randint(len(data) - block_size, (batch_size,))
+    data = np.memmap(os.path.join(data_dir, f'{split}.bin'), dtype=np.uint16, mode='r')
+    if ix is None:
+        ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
     y = torch.stack([torch.from_numpy((data[i+1:i+1+block_size]).astype(np.int64)) for i in ix])
     if device_type == 'cuda':
@@ -150,6 +130,9 @@ def get_batch(split):
     else:
         x, y = x.to(device), y.to(device)
     return x, y
+
+def get_dataset_size(split):
+    return len(np.memmap(os.path.join(data_dir, f'{split}.bin'), dtype=np.uint16, mode='r'))
 
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
@@ -355,23 +338,22 @@ if train:
             break
 else:
     model.eval()
-    dataset = BinaryFileDataset(data_dir, 'test', block_size)
-    dataloader = DataLoader(dataset, batch_size=batch_size)
+    dataset_size = get_dataset_size('test')
+    idxs = np.arange(dataset_size - block_size)
+    np.random.shuffle(idxs)
+    ix_list = np.array_split(idxs, np.ceil(dataset_size / batch_size))
+    losses = []
     with torch.no_grad():
-        total_loss, n_examples = 0., 0
-        for X, Y in dataloader:
-            X, Y = X.to(device), Y.to(device)
+        for ix in ix_list[::-1]:
+            X, Y = get_batch('test', ix)
             with ctx:
                 logits, _ = model(X)
-                logits = logits.squeeze()
-            targets = Y[:, -1]
-            loss = F.cross_entropy(logits, targets, ignore_index=-1)
+            loss = F.cross_entropy(logits.squeeze(), Y[:, -1], ignore_index=-1)
             loss = loss / math.log(2)
-            total_loss += loss.item()
-            n_examples += len(X)
+            losses.append(loss.item())
             del logits, loss
             torch.cuda.empty_cache()
-        print(f'test loss {total_loss / n_examples:.4f}')
+        print(f'test loss {np.mean(losses):.4f}')
 
 if ddp:
     destroy_process_group()
