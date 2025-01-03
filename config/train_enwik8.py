@@ -25,7 +25,7 @@ dropout = 0.
 shared_layers = []
 
 learning_rate = 1e-3
-max_iters = 50000
+max_iters = 10000
 lr_decay_iters = max_iters
 min_lr = learning_rate / 10
 

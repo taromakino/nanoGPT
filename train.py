@@ -134,6 +134,10 @@ def get_batch(split, ix=None):
 def get_dataset_size(split):
     return len(np.memmap(os.path.join(data_dir, f'{split}.bin'), dtype=np.uint16, mode='r'))
 
+def write(path, text):
+    with open(path, "a+") as f:
+        f.write(text + "\n")
+
 # init these up here, can override if init_from='resume' (i.e. from a checkpoint)
 iter_num = 0
 best_val_loss = 1e9
@@ -353,7 +357,10 @@ else:
             losses.append(loss.item())
             del logits, loss
             torch.cuda.empty_cache()
-        print(f'test loss {np.mean(losses):.4f}')
+        path = os.path.join(out_dir, "test_loss.txt")
+        if os.path.exists(path):
+            os.remove(path)
+        write(path, str(np.mean(losses)))
 
 if ddp:
     destroy_process_group()
