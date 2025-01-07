@@ -115,6 +115,7 @@ class GPTConfig:
     n_embd: int = 768
     dropout: float = 0.0
     bias: bool = True # True: bias in Linears and LayerNorms, like GPT-2. False: a bit better and faster
+    wle: bool=False
     shared_layers: [] = List
 
 class GPT(nn.Module):
@@ -145,7 +146,8 @@ class GPT(nn.Module):
         n_shared_layers = len(config.shared_layers)
         if n_shared_layers > 0:
             self.is_shared_layers = True
-            self.transformer['wle'] = nn.Embedding(n_shared_layers, config.n_embd)
+            if self.config.wle:
+                self.transformer['wle'] = nn.Embedding(n_shared_layers, config.n_embd)
         else:
             self.is_shared_layers = False
 
@@ -197,7 +199,7 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for i, block in enumerate(self.transformer.h):
-            if self.is_shared_layers and i in self.config.shared_layers:
+            if self.config.wle and self.is_shared_layers and i in self.config.shared_layers:
                 shared_layer_idx = self.config.shared_layers.index(i)
                 layer_emb = self.transformer.wle(shared_layer_idx * torch.ones(t, dtype=torch.long, device=x.device))
                 x = x + layer_emb
