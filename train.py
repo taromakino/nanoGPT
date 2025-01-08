@@ -345,12 +345,12 @@ if train:
 else:
     model.eval()
     dataset_size = get_dataset_size('test')
-    idxs = np.arange(dataset_size - block_size)
+    idxs = np.arange(dataset_size)
     np.random.shuffle(idxs)
     ix_list = np.array_split(idxs, np.ceil(dataset_size / batch_size))
     losses = []
     with torch.no_grad():
-        for ix in ix_list[::-1]:
+        for ix in ix_list:
             X, Y = get_batch('test', ix)
             with ctx:
                 logits, _ = model(X)

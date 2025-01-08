@@ -14,7 +14,9 @@ from io import BytesIO
 N_TOTAL = 100000000
 N_TRAIN = 90000000
 N_VAL = 5000000
-N_VOCAB = 205
+N_VOCAB = 256
+BLOCK_SIZE = 512
+PAD_ID = 32
 
 # download the enwik8 dataset
 input_file_path = os.path.join(os.path.dirname(__file__), 'input.txt')
@@ -35,7 +37,7 @@ assert len(data) == N_TOTAL
 bytes = sorted(list(set(data)))
 vocab_size = len(bytes)
 print(f"vocab size: {vocab_size:,}")
-assert vocab_size == N_VOCAB
+assert vocab_size == 205
 
 # create a mapping from nonconsecutive to consecutive integers
 byte_to_idx = {byte: idx for idx, byte in enumerate(bytes)}
@@ -48,22 +50,23 @@ def decode(idxs):
 data = encode(data)
 
 # create the train and test splits
-n = len(data)
+PAD = [PAD_ID] * BLOCK_SIZE
 train_ids = data[:N_TRAIN]
 val_ids = data[N_TRAIN:N_TRAIN + N_VAL]
-test_ids = data[N_TRAIN + N_VAL:]
+test_ids = PAD + data[N_TRAIN + N_VAL:]
 
 # export to bin files
 train_ids = np.array(train_ids, dtype=np.uint16)
 val_ids = np.array(val_ids, dtype=np.uint16)
 test_ids = np.array(test_ids, dtype=np.uint16)
+
 train_ids.tofile(os.path.join(os.path.dirname(__file__), 'train.bin'))
 val_ids.tofile(os.path.join(os.path.dirname(__file__), 'val.bin'))
 test_ids.tofile(os.path.join(os.path.dirname(__file__), 'test.bin'))
 
 # save the meta information as well, to help us encode/decode later
 meta = {
-    'vocab_size': vocab_size,
+    'vocab_size': N_VOCAB,
 }
 with open(os.path.join(os.path.dirname(__file__), 'meta.pkl'), 'wb') as f:
     pickle.dump(meta, f)

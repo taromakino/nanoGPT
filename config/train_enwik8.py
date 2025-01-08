@@ -15,13 +15,13 @@ wandb_run_name = 'mini-gpt'
 
 dataset = 'enwik8'
 gradient_accumulation_steps = 1
-batch_size = 192
-block_size = 1024
+batch_size = 16
+block_size = 512
 
 n_layer = 12
-n_head = 12
-n_embd = 768
-dropout = 0.
+n_head = 2
+n_embd = 512
+dropout = 0.2
 shared_layers = []
 
 learning_rate = 1e-3
