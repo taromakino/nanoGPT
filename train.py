@@ -345,7 +345,7 @@ if train:
 else:
     model.eval()
     dataset_size = get_dataset_size('test')
-    idxs = np.arange(dataset_size)
+    idxs = np.arange(dataset_size - block_size)
     np.random.shuffle(idxs)
     ix_list = np.array_split(idxs, np.ceil(dataset_size / batch_size))
     losses = []
