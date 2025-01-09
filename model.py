@@ -126,6 +126,7 @@ class GPT(nn.Module):
         assert config.block_size is not None
         self.config = config
 
+        # Share parameters between the shared layers
         layers = []
         shared_layer = None
         for i in range(config.n_layer):
@@ -143,6 +144,8 @@ class GPT(nn.Module):
             h = nn.ModuleList(layers),
             ln_f = LayerNorm(config.n_embd, bias=config.bias),
         ))
+
+        # Optionally include the layer encoding
         n_shared_layers = len(config.shared_layers)
         if n_shared_layers > 0:
             self.is_shared_layers = True
@@ -199,6 +202,7 @@ class GPT(nn.Module):
         pos_emb = self.transformer.wpe(pos) # position embeddings of shape (t, n_embd)
         x = self.transformer.drop(tok_emb + pos_emb)
         for i, block in enumerate(self.transformer.h):
+            # Apply the layer encoding
             if self.config.wle and self.is_shared_layers and i in self.config.shared_layers:
                 shared_layer_idx = self.config.shared_layers.index(i)
                 layer_emb = self.transformer.wle(shared_layer_idx * torch.ones(t, dtype=torch.long, device=x.device))
@@ -210,6 +214,7 @@ class GPT(nn.Module):
             # if we are given some desired targets also calculate the loss
             logits = self.lm_head(x)
             loss = F.cross_entropy(logits.view(-1, logits.size(-1)), targets.view(-1), ignore_index=-1)
+            # Convert to bits per character
             loss = loss / math.log(2)
         else:
             # inference-time mini-optimization: only forward the lm_head on the very last position

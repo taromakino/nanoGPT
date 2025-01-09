@@ -39,16 +39,6 @@ vocab_size = len(bytes)
 print(f"vocab size: {vocab_size:,}")
 assert vocab_size == 205
 
-# create a mapping from nonconsecutive to consecutive integers
-byte_to_idx = {byte: idx for idx, byte in enumerate(bytes)}
-idx_to_byte = {idx: byte for idx, byte in enumerate(bytes)}
-def encode(bytes):
-    return [byte_to_idx[c] for c in bytes]
-def decode(idxs):
-    return ''.join([idx_to_byte[i] for i in idxs])
-
-data = encode(data)
-
 # create the train and test splits
 PAD = [PAD_ID] * BLOCK_SIZE
 train_ids = data[:N_TRAIN]

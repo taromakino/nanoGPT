@@ -122,6 +122,7 @@ def get_batch(split, ix=None):
     # We recreate np.memmap every batch to avoid a memory leak, as per
     # https://stackoverflow.com/questions/45132940/numpy-memmap-memory-usage-want-to-iterate-once/61472122#61472122
     data = np.memmap(os.path.join(data_dir, f'{split}.bin'), dtype=np.uint16, mode='r')
+    # Specify ix at test time
     if ix is None:
         ix = torch.randint(len(data) - block_size, (batch_size,))
     x = torch.stack([torch.from_numpy((data[i:i+block_size]).astype(np.int64)) for i in ix])
@@ -354,7 +355,9 @@ else:
             X, Y = get_batch('test', ix)
             with ctx:
                 logits, _ = model(X)
+            # Only use the logits from the final position in each sequence
             loss = F.cross_entropy(logits.squeeze(), Y[:, -1], ignore_index=-1)
+            # Convert to bits per character
             loss = loss / math.log(2)
             losses.append(loss.item())
             del logits, loss
